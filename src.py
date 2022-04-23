@@ -1,5 +1,8 @@
 import os
+import re
 import cv2
+import time
+import numpy as np
 
 from color_detection import *
 
@@ -7,6 +10,7 @@ if not os.path.exists("results/"):
     os.mkdir("results/")
 
 cap = cv2.VideoCapture("test/0.avi")
+
 
 i = 0
 while(True):
@@ -19,6 +23,4 @@ while(True):
         i += 1
         if cv2.waitKey(100) & 0xFF == ord('q'):
             break
-    else:
-        break
-cap.release()
+    cap.release()
