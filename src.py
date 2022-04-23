@@ -1,27 +1,30 @@
 import os
-import re
+import sys
 import cv2
 import time
-import numpy as np
 
 from color_detection import *
 
 if not os.path.exists("results/"):
     os.mkdir("results/")
 
-cap = cv2.VideoCapture("test/0.avi")
+cap = cv2.VideoCapture("test/1.avi")
 
 
 if __name__ == "__main__":
     i = 0
+    debug = False
+    if len(sys.argv) > 1 and sys.argv[1] == "1":
+        debug = True
     while True:
         ret, frame = cap.read()
         if ret:
-            find_contours(frame, channels=CONTOURS_COMB)
-            # cv2.rectangle(frame, (200, 200), (400, 400), (0, 255, 0))
-            cv2.imshow("frame", frame)
-            cv2.imwrite("results/"+str(i)+".png", frame)
-            i += 1
+            pre = time.time()
+            detect(frame, channels=CONTOURS_COMB, debug=debug)
+            if debug:
+                print((time.time()-pre)*1000)
+                i += 1
+                cv2.imwrite("results/"+str(i)+".png", frame)
             if cv2.waitKey(100) & 0xFF == ord('q'):
                 break
         else:
