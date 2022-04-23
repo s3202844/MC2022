@@ -1,5 +1,4 @@
 import cv2
-from matplotlib.pyplot import contour
 import numpy as np
 
 CONTOURS_HSV = 0
