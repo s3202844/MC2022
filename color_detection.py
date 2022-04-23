@@ -132,7 +132,7 @@ def detect(frame, channels=CONTOURS_COMB, debug=False):
         dx = rect[1]+rect[3]*0.5-frame.shape[1]*0.5
         dy = rect[0]+rect[2]*0.5-frame.shape[0]*0.5
         dist = (dx**2+dy**2)**0.5
-        if (max_score == None or score > max_score) and dist < 100:
+        if (max_score == None or score > max_score) and dist < 100 and score > 75:
             max_score = score
             ROI = [
                 max(int(rect[1]-0.5*rect[3]), 0),
@@ -153,7 +153,7 @@ def detect(frame, channels=CONTOURS_COMB, debug=False):
             score = scores[i]
             rect = cv2.boundingRect(cnt)
             cv2.rectangle(results, (rect[0], rect[1]),
-                (rect[0]+rect[2], rect[1]+rect[3]), (0, 255, 0), 1)
+                          (rect[0]+rect[2], rect[1]+rect[3]), (0, 255, 0), 1)
             cv2.putText(results, str(int(score)), (rect[0], rect[1]),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         if ROI != None:
