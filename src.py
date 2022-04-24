@@ -22,15 +22,27 @@ if not os.path.exists("results/"):
 
 
 def detect_obstacle(camera, stream, channels=CONTOURS_COMB, debug=False):
+    """
+    Detect the obstacle and calculate distance.
+
+    Author: Gerlise, Donghang Lyo
+    """
     global obstacle, obstacle_lock
     for image in camera.capture_continuous(stream, format="bgr", use_video_port=True):
         frame = image.array
         stream.truncate(0)
         cv_timer = time.time()
+
+        # give the ROI of the obstacle
         detect(frame, channels=channels, debug=debug)
+
+        # Todo. calculate the distance
+
         obstacle_lock.acquire()
+        # # Todo. update the distance
         # obstacle = i
         obstacle_lock.release()
+
         # print((time.time()-cv_timer)*1000)
         if debug:
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -38,6 +50,12 @@ def detect_obstacle(camera, stream, channels=CONTOURS_COMB, debug=False):
 
 
 def communication():
+    """
+    Use Angular velocity from gyroscope MPU6050 to calculate yaw rotation. FIFO
+    is enabled to ensure accuracy. Sampling frequency is hard set to 200Hz.
+
+    Author: Haoran Yin
+    """
     global yaw, yaw_lock, n_sample, mpu_lock
     global i2c_timer, dt, gyroZ_offset
     i2c_timer = time.time()
@@ -45,6 +63,7 @@ def communication():
     mpu_lock.acquire()
     n_sample = 0
     mpu_lock.release()
+
     def yaw_rotation(KEY):
         global i2c_timer, dt, gyroZ_offset, yaw, yaw_lock, n_sample, mpu_lock
         gyro_data = mpu.get_gyro_data()
@@ -59,7 +78,7 @@ def communication():
             mpu_lock.acquire()
             n_sample += 1
             mpu_lock.release()
-        elif n <= 1/dt:
+        elif n < 1/dt:
             gyroZ_offset += gyro_data['z']*dt
             mpu_lock.acquire()
             n_sample += 1
@@ -80,22 +99,28 @@ def communication():
 
 
 def main():
+    """
+    The main controlling function. Control the picar to move along two different
+    trajectories, and avoid hitting obstacle. 
+
+    Author: Tao Peng
+    """
     global obstacle, obstacle_lock, yaw, yaw_lock, n_sample, mpu_lock
 
     while True:
-
+        # get the transformation vector from picar to obstacle.
         obstacle_lock.acquire()
         tVec = obstacle[:] if obstacle != None else None
         obstacle_lock.release()
-
+        # get the rotatino of picar
         yaw_lock.acquire()
         rotate = yaw
         yaw_lock.release()
 
-        if np.random.rand() < 0.001:
-            mpu_lock.acquire()
-            n_sample = 0
-            mpu_lock.release()
+        # # if you want to calibrate the mpu, do this
+        # mpu_lock.acquire()
+        # n_sample = 0
+        # mpu_lock.release()
 
         print("===================")
         print("obstacle:", obstacle)
