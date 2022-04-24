@@ -38,8 +38,8 @@ def find_contours_hsv(frame):
     low_orange = np.array([0, 76, 232])
     high_orange = np.array([41, 255, 255])
     mask_orange = cv2.inRange(hsv_frame, low_orange, high_orange)
-    contours_orange, _ = cv2.findContours(
-        mask_orange, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # contours_orange, _ = cv2.findContours(
+    #     mask_orange, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # pink color
     lower_pink = np.array([157, 211, 94])
@@ -76,7 +76,7 @@ def find_contours_bgr(frame):
 
 
 def find_contours(frame, channels=CONTOURS_COMB):
-    contours = ()
+    contours = []
     if channels == CONTOURS_HSV or channels == CONTOURS_COMB:
         contours += find_contours_hsv(frame)
     if channels == CONTOURS_BGR or channels == CONTOURS_COMB:

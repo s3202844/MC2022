@@ -2,66 +2,133 @@ import os
 import sys
 import cv2
 import time
+import numpy as np
 
+from picamera import PiCamera
+from picamera.array import PiRGBArray
 from threading import Thread, Lock
 from color_detection import *
+from mpu6050 import *
 
-global obstacle, yaw, obstacle_lock, yaw_lock
-obstacle, yaw = 0, 0
+global obstacle, obstacle_lock, yaw, yaw_lock, n_sample, mpu_lock
+obstacle, yaw = None, 0
 
 obstacle_lock = Lock()
 yaw_lock = Lock()
+mpu_lock = Lock()
 
 if not os.path.exists("results/"):
     os.mkdir("results/")
 
 
-def detect_obstacle(cap, channels=CONTOURS_COMB, debug=False):
-    i = 0
+def detect_obstacle(camera, stream, channels=CONTOURS_COMB, debug=False):
     global obstacle, obstacle_lock
-    while True:
-        ret, frame = cap.read()
-        if ret:
-            pre = time.time()
-            detect(frame, channels=channels, debug=debug)
-            obstacle_lock.acquire()
-            obstacle = i
-            # print(obstacle)
-            obstacle_lock.release()
-            if debug:
-                print((time.time()-pre)*1000)
-                i += 1
-                cv2.imwrite("results/"+str(i)+".png", frame)
-                if cv2.waitKey(100) & 0xFF == ord('q'):
-                    break
+    for image in camera.capture_continuous(stream, format="bgr", use_video_port=True):
+        frame = image.array
+        stream.truncate(0)
+        cv_timer = time.time()
+        detect(frame, channels=channels, debug=debug)
+        obstacle_lock.acquire()
+        # obstacle = i
+        obstacle_lock.release()
+        # print((time.time()-cv_timer)*1000)
+        if debug:
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+
+def communication():
+    global yaw, yaw_lock, n_sample, mpu_lock
+    global i2c_timer, dt, gyroZ_offset
+    i2c_timer = time.time()
+    dt = 5.0/1000
+    mpu_lock.acquire()
+    n_sample = 0
+    mpu_lock.release()
+    def yaw_rotation(KEY):
+        global i2c_timer, dt, gyroZ_offset, yaw, yaw_lock, n_sample, mpu_lock
+        gyro_data = mpu.get_gyro_data()
+        mpu_lock.acquire()
+        n = n_sample
+        mpu_lock.release()
+        if n == 0:
+            gyroZ_offset = gyro_data['z']*dt
+            yaw_lock.acquire()
+            yaw = 0.
+            yaw_lock.release()
+            mpu_lock.acquire()
+            n_sample += 1
+            mpu_lock.release()
+        elif n <= 1/dt:
+            gyroZ_offset += gyro_data['z']*dt
+            mpu_lock.acquire()
+            n_sample += 1
+            mpu_lock.release()
         else:
-            break
-    cap.release()
+            gyroZ = gyro_data['z'] - gyroZ_offset
+            yaw_lock.acquire()
+            yaw += gyroZ * dt
+            if yaw > 360:
+                yaw -= 360
+            if yaw < -360:
+                yaw += 360
+            yaw_lock.release()
+        # print(time.time() - i2c_timer)
+        i2c_timer = time.time()
+    mpu = mpu6050(0x68)
+    GPIO.add_event_detect(17, GPIO.FALLING, callback=yaw_rotation)
 
 
 def main():
-    global obstacle, obstacle_lock
+    global obstacle, obstacle_lock, yaw, yaw_lock, n_sample, mpu_lock
+
     while True:
+
+        obstacle_lock.acquire()
+        tVec = obstacle[:] if obstacle != None else None
+        obstacle_lock.release()
+
+        yaw_lock.acquire()
+        rotate = yaw
+        yaw_lock.release()
+
+        if np.random.rand() < 0.001:
+            mpu_lock.acquire()
+            n_sample = 0
+            mpu_lock.release()
+
+        print("===================")
+        print("obstacle:", obstacle)
+        print("yaw:", rotate)
         time.sleep(0.01)
-        # obstacle_lock.acquire()
-        # print(obstacle)
-        # obstacle_lock.release()
-        # time.sleep(30)
 
 
 if __name__ == "__main__":
     debug = False
     if len(sys.argv) > 1 and sys.argv[1] == "1":
         debug = True
-    cap = cv2.VideoCapture("test/1.avi")
+
+    camera = PiCamera()
+    camera.resolution = (640, 480)
+    # camera.iso = 100
+    # camera.saturation = 50
+    camera.vflip = True
+    camera.hflip = True
+    camera.framerate = 30
+    camera.contrast = 100
+
+    stream = PiRGBArray(camera, size=(640, 480))
+    time.sleep(0.5)
 
     main_thread = Thread(target=main)
+    i2c_thread = Thread(target=communication)
     cv_thread = Thread(target=detect_obstacle,
-                       args=(cap, CONTOURS_COMB, debug))
+                       args=(camera, stream, CONTOURS_COMB, debug))
 
     main_thread.start()
+    i2c_thread.start()
     cv_thread.start()
 
     main_thread.join()
+    i2c_thread.join()
     cv_thread.join()
-
