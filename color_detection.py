@@ -5,6 +5,16 @@ CONTOURS_HSV = 0
 CONTOURS_BGR = 1
 CONTOURS_COMB = 2
 
+# Load the parameters
+with open('results/blue', "r") as f1:
+    with open('results/green', "r") as f2:
+        with open('results/orange', "r") as f3:
+            with open('results/pink', "r") as f4:
+                low_blue, high_blue = f1.readline(), f1.readline()
+                low_green, high_green = f2.readline(), f2.readline()
+                low_orange, high_orange = f3.readline(), f3.readline()
+                low_pink, high_pink = f4.readline(), f4.readline()
+
 
 def image_colorfulness(image):
     (B, G, R) = cv2.split(image.astype("float"))
@@ -21,30 +31,22 @@ def find_contours_hsv(frame):
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
     # Blue color
-    low_blue = np.array([50, 206, 130])
-    high_blue = np.array([112, 255, 255])
     mask_blue = cv2.inRange(hsv_frame, low_blue, high_blue)
     contours_blue, _ = cv2.findContours(
         mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Green color
-    low_green = np.array([30, 76, 86])
-    high_green = np.array([56, 255, 206])
     mask_green = cv2.inRange(hsv_frame, low_green, high_green)
     contours_green, _ = cv2.findContours(
         mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Orange color
-    low_orange = np.array([0, 76, 232])
-    high_orange = np.array([41, 255, 255])
     mask_orange = cv2.inRange(hsv_frame, low_orange, high_orange)
     contours_orange, _ = cv2.findContours(
         mask_orange, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # pink color
-    lower_pink = np.array([157, 211, 94])
-    upper_pink = np.array([167, 255, 224])
-    mask_pink = cv2.inRange(hsv_frame, lower_pink, upper_pink)
+    mask_pink = cv2.inRange(hsv_frame, low_pink, high_pink)
     contours_pink, _ = cv2.findContours(
         mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
