@@ -2,6 +2,7 @@ import os
 import sys
 import cv2
 import time
+import copy
 import numpy as np
 
 from picamera import PiCamera
@@ -10,9 +11,12 @@ from threading import Thread, Lock
 from color_detection import *
 from mpu6050 import *
 
+global Frame, frame_loaded, frame_lock
 global obstacle, obstacle_lock, yaw, yaw_lock, n_sample, mpu_lock
 obstacle, yaw = None, 0
+frame_loaded = -1
 
+frame_lock = Lock()
 obstacle_lock = Lock()
 yaw_lock = Lock()
 mpu_lock = Lock()
@@ -21,32 +25,17 @@ if not os.path.exists("results/"):
     os.mkdir("results/")
 
 
-def detect_obstacle(camera, stream, channels=CONTOURS_COMB, debug=False):
-    """
-    Detect the obstacle and calculate distance.
-
-    Author: Gerlise, Donghang Lyo
-    """
-    global obstacle, obstacle_lock
+def capture(camera, stream):
+    global Frame, frame_loaded, frame_lock
+    cap_timer = time.time()
     for image in camera.capture_continuous(stream, format="bgr", use_video_port=True):
-        frame = image.array
+        frame_lock.acquire()
+        Frame = image.array
+        frame_loaded = False
+        frame_lock.release()
         stream.truncate(0)
-        cv_timer = time.time()
-
-        # give the ROI of the obstacle
-        detect(frame, channels=channels, debug=debug)
-
-        # Todo. calculate the distance
-
-        obstacle_lock.acquire()
-        # # Todo. update the distance
-        # obstacle = i
-        obstacle_lock.release()
-
-        # print((time.time()-cv_timer)*1000)
-        if debug:
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        # print((time.time()-cap_timer)*1000)
+        cap_timer = time.time()
 
 
 def communication():
@@ -92,10 +81,51 @@ def communication():
             if yaw < -360:
                 yaw += 360
             yaw_lock.release()
-        # print(time.time() - i2c_timer)
+        # print((time.time() - i2c_timer)*1000)
         i2c_timer = time.time()
     mpu = mpu6050(0x68)
     GPIO.add_event_detect(17, GPIO.FALLING, callback=yaw_rotation)
+
+
+def detect_obstacle(channels=CONTOURS_COMB, debug=False):
+    """
+    Detect the obstacle and calculate distance.
+
+    Author: Gerlise, Donghang Lyo
+    """
+    global Frame, frame_loaded, frame_lock
+    global obstacle, obstacle_lock
+    while True:
+        frame_lock.acquire()
+        if frame_loaded == -1:
+            loaded = True
+        else:
+            loaded = frame_loaded
+        frame_lock.release()
+        if not loaded:
+            cv_timer = time.time()
+
+            frame_lock.acquire()
+            frame_loaded = True
+            frame = Frame.copy()
+            frame_lock.release()
+
+            # give the ROI of the obstacle
+            ROI = detect(frame, channels=channels, debug=debug)
+
+            # Todo. calculate the distance
+
+            obstacle_lock.acquire()
+            # # Todo. update the distance
+            # obstacle = i
+            obstacle_lock.release()
+
+            print((time.time()-cv_timer)*1000)
+            if debug:
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+        else:
+            time.sleep(0.01)
 
 
 def main():
@@ -118,6 +148,7 @@ def main():
         yaw_lock.release()
 
         # # if you want to calibrate the mpu, do this
+        # # you should calibrate each time you want to turn
         # mpu_lock.acquire()
         # n_sample = 0
         # mpu_lock.release()
@@ -147,13 +178,15 @@ if __name__ == "__main__":
 
     main_thread = Thread(target=main)
     i2c_thread = Thread(target=communication)
-    cv_thread = Thread(target=detect_obstacle,
-                       args=(camera, stream, CONTOURS_COMB, debug))
+    camera_thread = Thread(target=capture, args=(camera, stream))
+    cv_thread = Thread(target=detect_obstacle, args=(CONTOURS_COMB, debug))
 
     main_thread.start()
     i2c_thread.start()
+    camera_thread.start()
     cv_thread.start()
 
     main_thread.join()
     i2c_thread.join()
+    camera_thread.join()
     cv_thread.join()
