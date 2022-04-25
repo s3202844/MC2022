@@ -120,7 +120,7 @@ def detect_obstacle(channels=CONTOURS_COMB, debug=False):
             # obstacle = i
             obstacle_lock.release()
 
-            print((time.time()-cv_timer)*1000)
+            # print((time.time()-cv_timer)*1000)
             if debug:
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
@@ -153,9 +153,9 @@ def main():
         # n_sample = 0
         # mpu_lock.release()
 
-        print("===================")
-        print("obstacle:", obstacle)
-        print("yaw:", rotate)
+        # print("===================")
+        # print("obstacle:", obstacle)
+        # print("yaw:", rotate)
         time.sleep(0.01)
 
 
