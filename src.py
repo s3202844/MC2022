@@ -153,9 +153,9 @@ def main():
         # n_sample = 0
         # mpu_lock.release()
 
-        # print("===================")
-        # print("obstacle:", obstacle)
-        # print("yaw:", rotate)
+        print("===================")
+        print("obstacle:", obstacle)
+        print("yaw:", rotate)
         time.sleep(0.01)
 
 
