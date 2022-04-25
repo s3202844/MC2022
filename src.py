@@ -2,23 +2,27 @@ import os
 import sys
 import cv2
 import time
-import copy
 import numpy as np
+import picar_4wd as fc
 
+from fractions import Fraction
 from picamera import PiCamera
 from picamera.array import PiRGBArray
 from threading import Thread, Lock
 from color_detection import *
 from mpu6050 import *
 
-global Frame, frame_loaded, frame_lock
-global obstacle, obstacle_lock, yaw, yaw_lock, n_sample, mpu_lock
-obstacle, yaw = None, 0
+global Frame, frame_loaded, cam_lock
+global obstacle, cv_lock
+global yaw, n_sample, mpu_lock
+global cv_task, mpu_start
 frame_loaded = -1
+obstacle, yaw, n_sample = None, 0, 0
+cv_task = 0
+mpu_start = False
 
-frame_lock = Lock()
-obstacle_lock = Lock()
-yaw_lock = Lock()
+cam_lock = Lock()
+cv_lock = Lock()
 mpu_lock = Lock()
 
 if not os.path.exists("results/"):
@@ -26,61 +30,71 @@ if not os.path.exists("results/"):
 
 
 def capture(camera, stream):
-    global Frame, frame_loaded, frame_lock
+    global Frame, frame_loaded, cam_lock
     cap_timer = time.time()
     for image in camera.capture_continuous(stream, format="bgr", use_video_port=True):
-        frame_lock.acquire()
+        # print(camera.awb_gains)
+        cam_lock.acquire()
         Frame = image.array
         frame_loaded = False
-        frame_lock.release()
+        cam_lock.release()
         stream.truncate(0)
         # print((time.time()-cap_timer)*1000)
         cap_timer = time.time()
 
 
-def communication():
+def Gyroscope():
     """
     Use Angular velocity from gyroscope MPU6050 to calculate yaw rotation. FIFO
     is enabled to ensure accuracy. Sampling frequency is hard set to 200Hz.
 
     Author: Haoran Yin
     """
-    global yaw, yaw_lock, n_sample, mpu_lock
-    global i2c_timer, dt, gyroZ_offset
+    global yaw, n_sample, mpu_lock
+    global i2c_timer, dt, gyroZ_offset, samples
     i2c_timer = time.time()
     dt = 5.0/1000
-    mpu_lock.acquire()
-    n_sample = 0
-    mpu_lock.release()
+    gyroZ_offset = 0
+    samples = []
 
     def yaw_rotation(KEY):
-        global i2c_timer, dt, gyroZ_offset, yaw, yaw_lock, n_sample, mpu_lock
+        global yaw, n_sample, mpu_start, mpu_lock
+        global i2c_timer, dt, gyroZ_offset, samples
         gyro_data = mpu.get_gyro_data()
         mpu_lock.acquire()
         n = n_sample
         mpu_lock.release()
-        if n == 0:
-            gyroZ_offset = gyro_data['z']*dt
-            yaw_lock.acquire()
-            yaw = 0.
-            yaw_lock.release()
+        if n < 1/dt:
+            if n == 0:
+                samples = [gyro_data['z']*100]
+                gyroZ_offset = gyro_data['z']*dt
+                mpu_lock.acquire()
+                yaw = 0.
+                mpu_lock.release()
+            else:
+                samples += [gyro_data['z']*100]
+                gyroZ_offset += gyro_data['z']*dt
             mpu_lock.acquire()
             n_sample += 1
             mpu_lock.release()
-        elif n < 1/dt:
-            gyroZ_offset += gyro_data['z']*dt
-            mpu_lock.acquire()
-            n_sample += 1
-            mpu_lock.release()
+            # print(gyro_data['z'])
         else:
-            gyroZ = gyro_data['z'] - gyroZ_offset
-            yaw_lock.acquire()
-            yaw += gyroZ * dt
-            if yaw > 360:
-                yaw -= 360
-            if yaw < -360:
-                yaw += 360
-            yaw_lock.release()
+            if samples != [] and np.std(samples) > 12:
+                mpu_lock.acquire()
+                n_sample = 0
+                mpu_lock.release()
+            else:
+                samples = []
+                mpu_start = True
+                gyroZ = gyro_data['z'] - gyroZ_offset
+                mpu_lock.acquire()
+                yaw += gyroZ * dt
+                if yaw > 360:
+                    yaw -= 360
+                if yaw < -360:
+                    yaw += 360
+                mpu_lock.release()
+                # print(gyro_data['z'], yaw)
         # print((time.time() - i2c_timer)*1000)
         i2c_timer = time.time()
     mpu = mpu6050(0x68)
@@ -93,37 +107,27 @@ def detect_obstacle(channels=CONTOURS_COMB, debug=False):
 
     Author: Gerlise, Donghang Lyo
     """
-    global Frame, frame_loaded, frame_lock
-    global obstacle, obstacle_lock
+    global Frame, frame_loaded, cam_lock
+    global obstacle, cv_task, cv_lock
     while True:
-        frame_lock.acquire()
+        cam_lock.acquire()
         if frame_loaded == -1:
             loaded = True
         else:
             loaded = frame_loaded
-        frame_lock.release()
+        cam_lock.release()
         if not loaded:
+            if cv_task == 0:
+                cv_task = 1
             cv_timer = time.time()
-
-            frame_lock.acquire()
+            cam_lock.acquire()
             frame_loaded = True
             frame = Frame.copy()
-            frame_lock.release()
-
+            cam_lock.release()
             # give the ROI of the obstacle
             ROI = detect(frame, channels=channels, debug=debug)
-
-            # Todo. calculate the distance
-
-            obstacle_lock.acquire()
-            # # Todo. update the distance
-            # obstacle = i
-            obstacle_lock.release()
-
             # print((time.time()-cv_timer)*1000)
-            if debug:
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+            cv2.waitKey(10)
         else:
             time.sleep(0.01)
 
@@ -135,17 +139,83 @@ def main():
 
     Author: Tao Peng
     """
-    global obstacle, obstacle_lock, yaw, yaw_lock, n_sample, mpu_lock
-
+    global obstacle, cv_lock, yaw, n_sample, mpu_lock
+    global cv_task, mpu_start
+    state = 0
+    start_flags = [False for _ in range(4)]
+    timer = time.time()
+    cache_yaw = 0
     while True:
+        if state == 0:
+            if cv_task != 0 and mpu_start:
+                state = 1
+        elif state == 1:
+            if start_flags[0] == False:
+                start_flags[0] = True
+                timer = time.time()
+                fc.forward(10)
+            else:
+                if time.time() - timer > 8:
+                    fc.stop()
+                    mpu_lock.acquire()
+                    cache_yaw = yaw
+                    mpu_lock.release()
+                    state = 2
+        elif state == 2:
+            if start_flags[1] == False:
+                start_flags[1] = True
+                mpu_lock.acquire()
+                n_sample = 0
+                mpu_lock.release()
+            else:
+                mpu_lock.acquire()
+                rotate = yaw
+                mpu_lock.release()
+                if rotate != 0:
+                    if rotate > -179-2:
+                        fc.turn_right(1)
+                    elif rotate < -181-2:
+                        fc.turn_left(1)
+                    else:
+                        fc.stop()
+                        state = 3
+        elif state == 3:
+            if start_flags[2] == False:
+                start_flags[2] = True
+                timer = time.time()
+                fc.forward(10)
+            else:
+                if time.time() - timer > 8:
+                    fc.stop()
+                    state = 4
+        elif state == 4:
+            if start_flags[3] == False:
+                start_flags[3] = True
+                mpu_lock.acquire()
+                n_sample = 0
+                mpu_lock.release()
+            else:
+                mpu_lock.acquire()
+                rotate = yaw
+                mpu_lock.release()
+                if rotate != 0:
+                    if rotate > -179:
+                        fc.turn_right(1)
+                    elif rotate < -181:
+                        fc.turn_left(1)
+                    else:
+                        fc.stop()
+                        state = 5
+        elif state == 5:
+            break
         # get the transformation vector from picar to obstacle.
-        obstacle_lock.acquire()
+        cv_lock.acquire()
         tVec = obstacle[:] if obstacle != None else None
-        obstacle_lock.release()
+        cv_lock.release()
         # get the rotatino of picar
-        yaw_lock.acquire()
+        mpu_lock.acquire()
         rotate = yaw
-        yaw_lock.release()
+        mpu_lock.release()
 
         # # if you want to calibrate the mpu, do this
         # # you should calibrate each time you want to turn
@@ -154,6 +224,7 @@ def main():
         # mpu_lock.release()
 
         print("===================")
+        print("State: ", state)
         print("obstacle:", obstacle)
         print("yaw:", rotate)
         time.sleep(0.01)
@@ -164,29 +235,32 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "1":
         debug = True
 
+    resolution = (320, 240)
     camera = PiCamera()
-    camera.resolution = (640, 480)
+    camera.resolution = resolution
     # camera.iso = 100
-    # camera.saturation = 50
-    camera.vflip = True
-    camera.hflip = True
-    camera.framerate = 30
     camera.contrast = 100
+    # camera.saturation = 100
+    camera.framerate = 40
+    camera.awb_mode = 'off'
+    camera.awb_gains = (Fraction(311, 256), Fraction(723, 256))
+    # camera.exposure_mode = 'off'
+    camera.image_effect = 'saturation'
 
-    stream = PiRGBArray(camera, size=(640, 480))
-    time.sleep(0.5)
+    stream = PiRGBArray(camera, size=resolution)
+    time.sleep(2)
 
     main_thread = Thread(target=main)
-    i2c_thread = Thread(target=communication)
-    camera_thread = Thread(target=capture, args=(camera, stream))
+    i2c_thread = Thread(target=Gyroscope)
+    cam_thread = Thread(target=capture, args=(camera, stream))
     cv_thread = Thread(target=detect_obstacle, args=(CONTOURS_COMB, debug))
 
     main_thread.start()
     i2c_thread.start()
-    camera_thread.start()
+    cam_thread.start()
     cv_thread.start()
 
     main_thread.join()
     i2c_thread.join()
-    camera_thread.join()
+    cam_thread.join()
     cv_thread.join()
