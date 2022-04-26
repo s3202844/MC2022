@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import os
+import json
 
 def nothing(x):
     pass
@@ -64,8 +65,7 @@ def log_next_color(img, filename):
             low = [phMin, psMin, pvMin]
             high = [phMax, psMax, pvMax]
             with open(filename, "w") as f:
-                f.write(str(low) + "\n")
-                f.write(str(high) + "\n")
+                json.dump([low, high], f)
             break
 
 if __name__ == '__main__':
@@ -76,8 +76,8 @@ if __name__ == '__main__':
 
     # Save parameters to file (press q when done)
     file_directory = "configs"
-    log_next_color(img, os.path.join(file_directory, "blue"))
-    log_next_color(img, os.path.join(file_directory, "green"))
-    log_next_color(img, os.path.join(file_directory, "orange"))
-    log_next_color(img, os.path.join(file_directory, "pink"))
+    log_next_color(img, os.path.join(file_directory, "blue.json"))
+    log_next_color(img, os.path.join(file_directory, "green.json"))
+    log_next_color(img, os.path.join(file_directory, "orange.json"))
+    log_next_color(img, os.path.join(file_directory, "pink.json"))
 

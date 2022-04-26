@@ -1,19 +1,24 @@
 import cv2
 import numpy as np
+import json
 
 CONTOURS_HSV = 0
 CONTOURS_BGR = 1
 CONTOURS_COMB = 2
 
 # Load the parameters
-with open('results/blue', "r") as f1:
-    with open('results/green', "r") as f2:
-        with open('results/orange', "r") as f3:
-            with open('results/pink', "r") as f4:
-                low_blue, high_blue = f1.readline(), f1.readline()
-                low_green, high_green = f2.readline(), f2.readline()
-                low_orange, high_orange = f3.readline(), f3.readline()
-                low_pink, high_pink = f4.readline(), f4.readline()
+with open('configs/blue.json') as f1:
+    with open('configs/green.json') as f2:
+        with open('configs/orange.json') as f3:
+            with open('configs/pink.json') as f4:
+                blue = json.load(f1)
+                green = json.load(f2)
+                orange = json.load(f3)
+                pink = json.load(f4)
+                low_blue, high_blue = blue[0], blue[1]
+                low_green, high_green = green[0], green[1]
+                low_orange, high_orange = orange[0], orange[1]
+                low_pink, high_pink = pink[0], pink[1]
 
 
 def image_colorfulness(image):
