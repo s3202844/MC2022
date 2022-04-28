@@ -29,10 +29,10 @@ def detect_obstacle(cap, channels=CONTOURS_COMB, debug=False):
             # print(obstacle)
             obstacle_lock.release()
             if debug:
-                print((time.time()-pre)*1000)
+                # print((time.time()-pre)*1000)
                 i += 1
                 cv2.imwrite("results/"+str(i)+".png", frame)
-                if cv2.waitKey(100) & 0xFF == ord('q'):
+                if cv2.waitKey(30) & 0xFF == ord('q'):
                     break
         else:
             break
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     debug = False
     if len(sys.argv) > 1 and sys.argv[1] == "1":
         debug = True
-    cap = cv2.VideoCapture("test/1.avi")
+    cap = cv2.VideoCapture("test/2.avi")
 
     main_thread = Thread(target=main)
     cv_thread = Thread(target=detect_obstacle,

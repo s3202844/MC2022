@@ -28,14 +28,14 @@ def find_contours_hsv(frame):
         mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Green color
-    low_green = np.array([30, 76, 86])
-    high_green = np.array([56, 255, 206])
+    low_green = np.array([35, 43, 46])
+    high_green = np.array([77, 255, 255])
     mask_green = cv2.inRange(hsv_frame, low_green, high_green)
     contours_green, _ = cv2.findContours(
         mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Orange color
-    low_orange = np.array([0, 76, 232])
+    low_orange = np.array([0, 43, 46])
     high_orange = np.array([41, 255, 255])
     mask_orange = cv2.inRange(hsv_frame, low_orange, high_orange)
     contours_orange, _ = cv2.findContours(
@@ -52,7 +52,8 @@ def find_contours_hsv(frame):
     return contours
 
 
-def find_contours_bgr(frame):
+def find_contours_huv(frame):
+    huv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2YCrCb)
     kernel = np.ones((3, 3), np.uint8)
     _, green = cv2.threshold(frame[:, :, 1], 130, 255, cv2.THRESH_BINARY)
     _, red = cv2.threshold(frame[:, :, 2], 120, 255, cv2.THRESH_BINARY_INV)
@@ -79,8 +80,8 @@ def find_contours(frame, channels=CONTOURS_COMB):
     contours = ()
     if channels == CONTOURS_HSV or channels == CONTOURS_COMB:
         contours += find_contours_hsv(frame)
-    if channels == CONTOURS_BGR or channels == CONTOURS_COMB:
-        contours += find_contours_bgr(frame)
+    # if channels == CONTOURS_BGR or channels == CONTOURS_COMB:
+    #     contours += find_contours_bgr(frame)
     res = []
     for cnt in contours:
         isObject = True
@@ -159,6 +160,6 @@ def detect(frame, channels=CONTOURS_COMB, debug=False):
         if ROI != None:
             cv2.rectangle(results, (ROI[2], ROI[0]),
                           (ROI[3], ROI[1]), (0, 255, 0), 2)
-        cv2.imshow("mask", mask)
-        cv2.imshow("debug", results)
+        cv2.imshow("mask", cv2.resize(mask, None, fx=2, fy=2))
+        cv2.imshow("debug", cv2.resize(results, None, fx=2, fy=2))
     return ROI
