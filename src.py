@@ -132,107 +132,92 @@ def detect_obstacle(channels=CONTOURS_COMB, debug=False):
             time.sleep(0.01)
 
 
-def main():
+class Car:
+    def __init__(self, task2=False):
+        self.task2 = task2
+        self.v = 3.
+        self.target_yaw = 0.
+    
+    def start(self):
+        global cv_task, mpu_start
+        while cv_task == 0 or not mpu_start:
+            self.output()
+
+    def run(self, meter):
+        timer = time.time()
+        fc.forward(10)
+        while time.time() - timer < self.v * meter:
+            self.output()
+        fc.stop()
+
+    def turn(self, degree):
+        global mpu_lock, yaw
+        direction = 0
+        self.target_yaw -= degree-1
+        while True:
+            self.output()
+            mpu_lock.acquire()
+            rotation = yaw
+            mpu_lock.release()
+            if rotation > self.target_yaw+1:
+                if direction != -1:
+                    fc.turn_right(10)
+                    direction = -1
+            elif rotation < self.target_yaw-1:
+                if direction != 1:
+                    fc.turn_left(10)
+                    direction = 1
+            else:
+                fc.stop()
+                break
+    
+    def output(self):
+        global cv_lock, obstacle, mpu_lock, yaw
+        cv_lock.acquire()
+        tVec = obstacle[:] if obstacle != None else None
+        cv_lock.release()
+        mpu_lock.acquire()
+        rotate = yaw
+        mpu_lock.release()
+        print("===================")
+        print("obstacle:", obstacle)
+        print("yaw:", rotate)
+        time.sleep(0.01)
+
+def main(trajectory, task):
     """
     The main controlling function. Control the picar to move along two different
     trajectories, and avoid hitting obstacle. 
 
     Author: Tao Peng
     """
-    global obstacle, cv_lock, yaw, n_sample, mpu_lock
-    global cv_task, mpu_start
-    state = 0
-    start_flags = [False for _ in range(4)]
-    timer = time.time()
-    cache_yaw = 0
-    while True:
-        if state == 0:
-            if cv_task != 0 and mpu_start:
-                state = 1
-        elif state == 1:
-            if start_flags[0] == False:
-                start_flags[0] = True
-                timer = time.time()
-                fc.forward(10)
-            else:
-                if time.time() - timer > 8:
-                    fc.stop()
-                    mpu_lock.acquire()
-                    cache_yaw = yaw
-                    mpu_lock.release()
-                    state = 2
-        elif state == 2:
-            if start_flags[1] == False:
-                start_flags[1] = True
-                mpu_lock.acquire()
-                n_sample = 0
-                mpu_lock.release()
-            else:
-                mpu_lock.acquire()
-                rotate = yaw
-                mpu_lock.release()
-                if rotate != 0:
-                    if rotate > -179-2:
-                        fc.turn_right(1)
-                    elif rotate < -181-2:
-                        fc.turn_left(1)
-                    else:
-                        fc.stop()
-                        state = 3
-        elif state == 3:
-            if start_flags[2] == False:
-                start_flags[2] = True
-                timer = time.time()
-                fc.forward(10)
-            else:
-                if time.time() - timer > 8:
-                    fc.stop()
-                    state = 4
-        elif state == 4:
-            if start_flags[3] == False:
-                start_flags[3] = True
-                mpu_lock.acquire()
-                n_sample = 0
-                mpu_lock.release()
-            else:
-                mpu_lock.acquire()
-                rotate = yaw
-                mpu_lock.release()
-                if rotate != 0:
-                    if rotate > -179:
-                        fc.turn_right(1)
-                    elif rotate < -181:
-                        fc.turn_left(1)
-                    else:
-                        fc.stop()
-                        state = 5
-        elif state == 5:
-            break
-        # get the transformation vector from picar to obstacle.
-        cv_lock.acquire()
-        tVec = obstacle[:] if obstacle != None else None
-        cv_lock.release()
-        # get the rotatino of picar
-        mpu_lock.acquire()
-        rotate = yaw
-        mpu_lock.release()
-
-        # # if you want to calibrate the mpu, do this
-        # # you should calibrate each time you want to turn
-        # mpu_lock.acquire()
-        # n_sample = 0
-        # mpu_lock.release()
-
-        print("===================")
-        print("State: ", state)
-        print("obstacle:", obstacle)
-        print("yaw:", rotate)
-        time.sleep(0.01)
+    car = Car(task==2)
+    car.start()
+    if trajectory == 1:
+        car.run(2)
+        car.turn(180)
+        car.run(2)
+        car.turn(180)
+    else:
+        car.run(2)
+        car.turn(90)
+        car.run(1)
+        car.turn(90)
+        car.run(2)
+        car.turn(90)
+        car.run(1)
+        car.turn(90)
 
 
 if __name__ == "__main__":
     debug = False
-    if len(sys.argv) > 1 and sys.argv[1] == "1":
+    if len(sys.argv) < 3:
+        print("Not enough params:")
+        print("\tpython src.py <trajectory 1 or 2> <task 1 or 2> [<visulaize 0 or 1>]")
+        sys.exit(-1)
+    trajectory = int(sys.argv[1])
+    task = int(sys.argv[2])
+    if len(sys.argv) > 3 and sys.argv[3] == "1":
         debug = True
 
     resolution = (320, 240)
@@ -250,17 +235,17 @@ if __name__ == "__main__":
     stream = PiRGBArray(camera, size=resolution)
     time.sleep(2)
 
-    main_thread = Thread(target=main)
     i2c_thread = Thread(target=Gyroscope)
     cam_thread = Thread(target=capture, args=(camera, stream))
     cv_thread = Thread(target=detect_obstacle, args=(CONTOURS_COMB, debug))
+    main_thread = Thread(target=main, args=(trajectory, task))
 
-    main_thread.start()
     i2c_thread.start()
     cam_thread.start()
     cv_thread.start()
+    main_thread.start()
 
-    main_thread.join()
     i2c_thread.join()
     cam_thread.join()
     cv_thread.join()
+    main_thread.join()
