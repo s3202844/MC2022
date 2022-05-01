@@ -17,7 +17,7 @@ global obstacle, cv_lock
 global yaw, n_sample, mpu_lock
 global cv_task, mpu_start
 frame_loaded = -1
-obstacle, yaw, n_sample = None, 0, 0
+obstacle, yaw, n_sample = False, 0, 0
 cv_task = 0
 mpu_start = False
 
@@ -125,7 +125,7 @@ def detect_obstacle(channels=CONTOURS_COMB, debug=False):
             frame = Frame.copy()
             cam_lock.release()
             # give the ROI of the obstacle
-            ROI = detect(frame, channels=channels, debug=debug)
+            obstacle = detect(frame, channels=channels, debug=debug)
             # print((time.time()-cv_timer)*1000)
             cv2.waitKey(10)
         else:
@@ -133,27 +133,36 @@ def detect_obstacle(channels=CONTOURS_COMB, debug=False):
 
 
 class Car:
-    def __init__(self, task2=False):
-        self.task2 = task2
-        self.v = 3.
+    def __init__(self):
+        self.v = 3.7
         self.target_yaw = 0.
+        self.avoid_path = 0.5
     
     def start(self):
         global cv_task, mpu_start
         while cv_task == 0 or not mpu_start:
             self.output()
 
-    def run(self, meter):
+    def run(self, meter, flag=False):
+        global obstacle
         timer = time.time()
         fc.forward(10)
+        m, n = 0., meter
         while time.time() - timer < self.v * meter:
+            if flag and obstacle:
+                t = time.time()
+                m += (t-timer)/self.v + self.avoid_path
+                meter = n-m
+                self.avoid()
+                fc.forward(10)
+                timer = time.time()
             self.output()
         fc.stop()
 
     def turn(self, degree):
         global mpu_lock, yaw
         direction = 0
-        self.target_yaw -= degree-1
+        self.target_yaw -= degree
         while True:
             self.output()
             mpu_lock.acquire()
@@ -171,16 +180,25 @@ class Car:
                 fc.stop()
                 break
     
+    def avoid(self):
+        self.turn(90)
+        self.run(0.2)
+        self.turn(-90)
+        self.run(self.avoid_path)
+        self.turn(-90)
+        self.run(0.2)
+        self.turn(90)
+    
     def output(self):
         global cv_lock, obstacle, mpu_lock, yaw
         cv_lock.acquire()
-        tVec = obstacle[:] if obstacle != None else None
+        flag = obstacle
         cv_lock.release()
         mpu_lock.acquire()
         rotate = yaw
         mpu_lock.release()
         print("===================")
-        print("obstacle:", obstacle)
+        print("obstacle:", flag)
         print("yaw:", rotate)
         time.sleep(0.01)
 
@@ -191,21 +209,22 @@ def main(trajectory, task):
 
     Author: Tao Peng
     """
-    car = Car(task==2)
+    car = Car()
     car.start()
+    # car.avoid()
     if trajectory == 1:
-        car.run(2)
+        car.run(2, task==2)
         car.turn(180)
-        car.run(2)
+        car.run(2, task==2)
         car.turn(180)
     else:
-        car.run(2)
+        car.run(2, task==2)
         car.turn(90)
-        car.run(1)
+        car.run(1, task==2)
         car.turn(90)
-        car.run(2)
+        car.run(2, task==2)
         car.turn(90)
-        car.run(1)
+        car.run(1, task==2)
         car.turn(90)
 
 
@@ -227,8 +246,8 @@ if __name__ == "__main__":
     camera.contrast = 100
     # camera.saturation = 100
     camera.framerate = 40
-    camera.awb_mode = 'off'
-    camera.awb_gains = (Fraction(311, 256), Fraction(723, 256))
+    # camera.awb_mode = 'off'
+    # camera.awb_gains = (Fraction(311, 256), Fraction(723, 256))
     # camera.exposure_mode = 'off'
     camera.image_effect = 'saturation'
 

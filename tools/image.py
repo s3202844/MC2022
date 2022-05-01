@@ -5,6 +5,7 @@ import time
 from fractions import Fraction
 from picamera import PiCamera
 from picamera.array import PiRGBArray
+from color_detection import *
 
 if not os.path.exists("images/"):
     os.mkdir("images/")
@@ -15,13 +16,13 @@ if __name__ == "__main__":
     camera = PiCamera()
     camera.resolution = resolution
     # camera.iso = 100
-    # camera.contrast = 100
+    camera.contrast = 100
     # camera.saturation = 100
-    # camera.framerate = 40
+    camera.framerate = 40
     # camera.awb_mode = 'off'
     # camera.awb_gains = (Fraction(311, 256), Fraction(723, 256))
     # camera.exposure_mode = 'off'
-    # camera.image_effect = 'saturation'
+    camera.image_effect = 'saturation'
 
     stream = PiRGBArray(camera, size=resolution)
     time.sleep(2)
@@ -31,6 +32,8 @@ if __name__ == "__main__":
     for frame in camera.capture_continuous(stream, format="bgr", use_video_port=True):
         image = frame.array
         cv2.imshow("preview", image)
+        flag = detect(image, CONTOURS_COMB, True)
+        print(flag)
         stream.truncate(0)
         key = cv2.waitKey(10)
         if key == ord("q"):

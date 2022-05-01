@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 
+from args import Args
+
 CONTOURS_HSV = 0
 CONTOURS_BGR = 1
 CONTOURS_COMB = 2
@@ -18,60 +20,39 @@ def image_colorfulness(image):
 
 
 def find_contours_hsv(frame):
+    args = Args("config/cv.json")
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
     # Blue color
-    low_blue = np.array([50, 206, 130])
-    high_blue = np.array([112, 255, 255])
-    mask_blue = cv2.inRange(hsv_frame, low_blue, high_blue)
+    lower_blue = np.array(args.hsv_blue[0])
+    upper_blue = np.array(args.hsv_blue[1])
+    mask_blue = cv2.inRange(hsv_frame, lower_blue, upper_blue)
     contours_blue, _ = cv2.findContours(
         mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Green color
-    low_green = np.array([30, 76, 86])
-    high_green = np.array([56, 255, 206])
-    mask_green = cv2.inRange(hsv_frame, low_green, high_green)
+    lower_green = np.array(args.hsv_green[0])
+    upper_green = np.array(args.hsv_green[1])
+    mask_green = cv2.inRange(hsv_frame, lower_green, upper_green)
     contours_green, _ = cv2.findContours(
         mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Orange color
-    low_orange = np.array([0, 76, 232])
-    high_orange = np.array([41, 255, 255])
-    mask_orange = cv2.inRange(hsv_frame, low_orange, high_orange)
-    # contours_orange, _ = cv2.findContours(
-    #     mask_orange, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    lower_orange = np.array(args.hsv_orange[0])
+    upper_orange = np.array(args.hsv_orange[1])
+    mask_orange = cv2.inRange(hsv_frame, lower_orange, upper_orange)
+    contours_orange, _ = cv2.findContours(
+        mask_orange, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # pink color
-    lower_pink = np.array([157, 211, 94])
-    upper_pink = np.array([167, 255, 224])
+    lower_pink = np.array(args.hsv_pink[0])
+    upper_pink = np.array(args.hsv_pink[1])
     mask_pink = cv2.inRange(hsv_frame, lower_pink, upper_pink)
     contours_pink, _ = cv2.findContours(
         mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # cv2.imshow("hsv_mask", mask_orange)
 
     contours = contours_blue + contours_green + contours_pink
-    return contours
-
-
-def find_contours_bgr(frame):
-    kernel = np.ones((3, 3), np.uint8)
-    _, green = cv2.threshold(frame[:, :, 1], 130, 255, cv2.THRESH_BINARY)
-    _, red = cv2.threshold(frame[:, :, 2], 120, 255, cv2.THRESH_BINARY_INV)
-    mask_green = np.bitwise_and(red, green)
-    mask_green = cv2.morphologyEx(mask_green, cv2.MORPH_CLOSE, kernel)
-    # mask_green = cv2.morphologyEx(mask_green, cv2.MORPH_OPEN, kernel)
-
-    _, green = cv2.threshold(frame[:, :, 1], 75, 255, cv2.THRESH_BINARY_INV)
-    _, red = cv2.threshold(frame[:, :, 2], 175, 255, cv2.THRESH_BINARY)
-    mask_red = np.bitwise_and(red, green)
-    mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_CLOSE, kernel)
-    # mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_OPEN, kernel)
-
-    contours_green, _ = cv2.findContours(
-        mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours_red, _ = cv2.findContours(
-        mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    contours = contours_green + contours_red
     return contours
 
 
@@ -79,8 +60,6 @@ def find_contours(frame, channels=CONTOURS_COMB):
     contours = []
     if channels == CONTOURS_HSV or channels == CONTOURS_COMB:
         contours += find_contours_hsv(frame)
-    if channels == CONTOURS_BGR or channels == CONTOURS_COMB:
-        contours += find_contours_bgr(frame)
     res = []
     for cnt in contours:
         isObject = True
@@ -134,12 +113,7 @@ def detect(frame, channels=CONTOURS_COMB, debug=False):
         dist = (dx**2+dy**2)**0.5
         if (max_score == None or score > max_score) and dist < 100 and score > 75:
             max_score = score
-            ROI = [
-                max(int(rect[1]-0.5*rect[3]), 0),
-                min(int(rect[1]+1.5*rect[3]), frame.shape[1]),
-                max(int(rect[0]-0.5*rect[2]), 0),
-                min(int(rect[0]+1.5*rect[2]), frame.shape[0])
-            ]
+            ROI = rect
     if debug:
         results = np.copy(frame)
         for cnt in contours:
@@ -156,9 +130,8 @@ def detect(frame, channels=CONTOURS_COMB, debug=False):
                           (rect[0]+rect[2], rect[1]+rect[3]), (0, 255, 0), 1)
             cv2.putText(results, str(int(score)), (rect[0], rect[1]),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        if ROI != None:
-            cv2.rectangle(results, (ROI[2], ROI[0]),
-                          (ROI[3], ROI[1]), (0, 255, 0), 2)
-        cv2.imshow("mask", mask)
-        cv2.imshow("debug", results)
-    return ROI
+        cv2.imshow("mask", cv2.resize(mask, None, fx=2, fy=2))
+        cv2.imshow("debug", cv2.resize(results, None, fx=2, fy=2))
+    if ROI != None and ROI[2] > 90 and ROI[1]+0.5*ROI[3] > 80:
+        return True
+    return False
