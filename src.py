@@ -9,8 +9,8 @@ from fractions import Fraction
 from picamera import PiCamera
 from picamera.array import PiRGBArray
 from threading import Thread, Lock
-from color_detection import *
-from mpu6050 import *
+from libs.color_detection import *
+from libs.mpu6050 import *
 
 global Frame, frame_loaded, cam_lock
 global obstacle, cv_lock

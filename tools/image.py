@@ -5,7 +5,7 @@ import time
 from fractions import Fraction
 from picamera import PiCamera
 from picamera.array import PiRGBArray
-from color_detection import *
+from libs.color_detection import *
 
 if not os.path.exists("images/"):
     os.mkdir("images/")

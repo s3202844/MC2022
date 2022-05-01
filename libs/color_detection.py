@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from args import Args
+from libs.args import Args
 
 CONTOURS_HSV = 0
 CONTOURS_BGR = 1
