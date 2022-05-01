@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 
+from args import Args
+
 CONTOURS_HSV = 0
 CONTOURS_BGR = 1
 CONTOURS_COMB = 2
@@ -18,35 +20,37 @@ def image_colorfulness(image):
 
 
 def find_contours_hsv(frame):
+    args = Args("config\cv.json")
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
     # Blue color
-    low_blue = np.array([50, 206, 130])
-    high_blue = np.array([112, 255, 255])
-    mask_blue = cv2.inRange(hsv_frame, low_blue, high_blue)
+    lower_blue = np.array(args.hsv_blue[0])
+    upper_blue = np.array(args.hsv_blue[1])
+    mask_blue = cv2.inRange(hsv_frame, lower_blue, upper_blue)
     contours_blue, _ = cv2.findContours(
         mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Green color
-    low_green = np.array([35, 43, 46])
-    high_green = np.array([77, 255, 255])
-    mask_green = cv2.inRange(hsv_frame, low_green, high_green)
+    lower_green = np.array(args.hsv_green[0])
+    upper_green = np.array(args.hsv_green[1])
+    mask_green = cv2.inRange(hsv_frame, lower_green, upper_green)
     contours_green, _ = cv2.findContours(
         mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Orange color
-    low_orange = np.array([0, 43, 46])
-    high_orange = np.array([41, 255, 255])
-    mask_orange = cv2.inRange(hsv_frame, low_orange, high_orange)
+    lower_orange = np.array(args.hsv_orange[0])
+    upper_orange = np.array(args.hsv_orange[1])
+    mask_orange = cv2.inRange(hsv_frame, lower_orange, upper_orange)
     contours_orange, _ = cv2.findContours(
         mask_orange, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # pink color
-    lower_pink = np.array([157, 211, 94])
-    upper_pink = np.array([167, 255, 224])
+    lower_pink = np.array(args.hsv_pink[0])
+    upper_pink = np.array(args.hsv_pink[1])
     mask_pink = cv2.inRange(hsv_frame, lower_pink, upper_pink)
     contours_pink, _ = cv2.findContours(
         mask_pink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.imshow("hsv_mask", mask_orange)
 
     contours = contours_blue + contours_green + contours_pink
     return contours
