@@ -23,7 +23,8 @@ def detect_obstacle(cap, channels=CONTOURS_COMB, debug=False):
         ret, frame = cap.read()
         if ret:
             pre = time.time()
-            detect(frame, channels=channels, debug=debug)
+            res = detect(frame, channels=channels, debug=debug)
+            print(res)
             obstacle_lock.acquire()
             obstacle = i
             # print(obstacle)
